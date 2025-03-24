@@ -1,0 +1,15 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\client",
+    "\\client\\public",
+    "\\client\\src",
+    "\\client\\src\\page",
+    "\\server",
+    "\\server\\config",
+    "\\server\\controllers",
+    "\\server\\models"
+  ],
+  "SelectedNode": "\\client\\index.html",
+  "PreviewInSolutionExplorer": false
+}
