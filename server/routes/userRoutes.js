@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/authController");
 const auth = require("../middleware/auth");
-const User = require("../models/User"); // Add this import
+const User = require("../models/user"); // Add this import
 
 // Update user profile (protected route)
 router.put("/profile", auth, authController.updateProfile);
