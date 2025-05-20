@@ -7,11 +7,13 @@ const Deposit = () => {
   const [amount, setAmount] = useState("");
   const [wallet, setWallet] = useState("");
   const [usdValue, setUsdValue] = useState(0);
-  const [solanaPrice, setSolanaPrice] = useState(100); // Default value until API fetches
+  const [solanaPrice, setSolanaPrice] = useState(100);
   const [walletBalance, setWalletBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [userEmail, setUserEmail] = useState(""); // Add user email state
 
   // Your wallet address
   const walletAddress = "ENqqKBZQks2mchfQCKwhCadtG8atMUedCMdSywPZuCJR";
@@ -28,18 +30,20 @@ const Deposit = () => {
   useEffect(() => {
     // Fetch data on component mount
     fetchData();
+
+    // Get user email from localStorage or wherever it's stored
+    const email = localStorage.getItem("userEmail") || "user@example.com";
+    setUserEmail(email);
   }, []);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Fetch Solana price and wallet balance in parallel
       const [priceResponse, balanceResponse] = await Promise.all([
         fetchSolanaPrice(),
         fetchWalletBalance(),
       ]);
 
-      // Update last fetched time
       setLastUpdated(new Date());
       setIsLoading(false);
     } catch (err) {
@@ -63,7 +67,6 @@ const Deposit = () => {
       const price = data.solana.usd;
       setSolanaPrice(price);
 
-      // Update USD value if amount is already entered
       if (amount) {
         setUsdValue((amount * price).toFixed(2));
       }
@@ -71,7 +74,6 @@ const Deposit = () => {
       return price;
     } catch (error) {
       console.error("Error fetching Solana price:", error);
-      // Keep using existing price
       return solanaPrice;
     }
   };
@@ -99,25 +101,20 @@ const Deposit = () => {
         throw new Error(data.error.message || "Error fetching balance");
       }
 
-      // Get balance from API (convert from lamports to SOL)
       let balance = data.result?.value / 1e9 || 0;
       setWalletBalance(balance);
-
-      // Store last known balance
       localStorage.setItem("lastKnownBalance", balance.toString());
 
       return balance;
     } catch (error) {
       console.error("Error fetching wallet balance:", error);
 
-      // Try to get the last known balance from localStorage
       const lastKnownBalance = localStorage.getItem("lastKnownBalance");
       if (lastKnownBalance && !isNaN(parseFloat(lastKnownBalance))) {
         setWalletBalance(parseFloat(lastKnownBalance));
         return parseFloat(lastKnownBalance);
       }
 
-      // Fall back to zero if no cached balance
       setWalletBalance(0);
       return 0;
     }
@@ -128,34 +125,99 @@ const Deposit = () => {
     setUsdValue((value * solanaPrice).toFixed(2));
   };
 
-  const handleDeposit = () => {
+  const sendDepositNotification = async (email, amount, usdValue, txHash) => {
+    try {
+      const response = await fetch("/api/deposit/notification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          amount,
+          usdValue,
+          txHash,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send notification");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error sending deposit notification:", error);
+      throw error;
+    }
+  };
+
+  const simulateTransaction = async () => {
+    // Simulate transaction processing
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          txHash:
+            "sol" +
+            Math.random().toString(36).substring(2, 15) +
+            Math.random().toString(36).substring(2, 15),
+        });
+      }, 3000);
+    });
+  };
+
+  const handleDeposit = async () => {
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       setError("Please enter a valid amount");
       return;
     }
 
-    // Generate transaction hash for simulation
-    const txHash =
-      "sol" +
-      Math.random().toString(36).substring(2, 15) +
-      Math.random().toString(36).substring(2, 15);
+    setIsProcessing(true);
 
-    // Store deposit details in localStorage
-    localStorage.setItem("depositAmount", amount);
-    localStorage.setItem("depositUsdValue", usdValue);
-    localStorage.setItem(
-      "depositDetails",
-      JSON.stringify({
-        amount: parseFloat(amount),
-        usdValue: parseFloat(usdValue),
-        timestamp: Date.now(),
-        txHash: txHash,
-        status: "pending", // Add status to track payment progress
-      })
-    );
+    try {
+      // Simulate transaction processing
+      const txResult = await simulateTransaction();
 
-    // Navigate to payment page
-    navigate("/payment-details");
+      if (txResult.success) {
+        // Send email notification
+        await sendDepositNotification(
+          userEmail,
+          amount,
+          usdValue,
+          txResult.txHash
+        );
+
+        // Store deposit details
+        localStorage.setItem("depositAmount", amount);
+        localStorage.setItem("depositUsdValue", usdValue);
+        localStorage.setItem(
+          "depositDetails",
+          JSON.stringify({
+            amount: parseFloat(amount),
+            usdValue: parseFloat(usdValue),
+            timestamp: Date.now(),
+            txHash: txResult.txHash,
+            status: "completed",
+          })
+        );
+
+        // Navigate to success page
+        navigate("/payment-success", {
+          state: {
+            amount,
+            usdValue,
+            txHash: txResult.txHash,
+          },
+        });
+      } else {
+        setError("Transaction failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("Deposit error:", error);
+      setError("An error occurred during deposit. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const refreshData = () => {
@@ -225,12 +287,16 @@ const Deposit = () => {
 
           <button
             onClick={handleDeposit}
-            disabled={isLoading}
+            disabled={isLoading || isProcessing}
             className={`mt-6 w-full py-3 px-4 bg-gradient-to-r from-[#3BC4BD] to-[#52AAC5] text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#52AAC5] ${
-              isLoading ? "opacity-50 cursor-not-allowed" : ""
+              isLoading || isProcessing ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
-            {isLoading ? "Loading..." : "Deposit Funds"}
+            {isProcessing
+              ? "Processing..."
+              : isLoading
+              ? "Loading..."
+              : "Deposit Funds"}
           </button>
         </div>
 
