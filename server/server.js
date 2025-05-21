@@ -6,6 +6,7 @@ const authRoutes = require("./routes/authRoutes");
 const supportRoutes = require("./routes/supportRoutes");
 const userRoutes = require("./routes/userRoutes");
 const emailRoutes = require("./routes/emailRoutes");
+const withdrawalEmails = require("./routes/withdrawalEmails");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes); // Added user routes for profile management
 app.use("/api", supportRoutes);
 app.use("/api", emailRoutes); // Add email routes
+app.use("/api", withdrawalEmails);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
